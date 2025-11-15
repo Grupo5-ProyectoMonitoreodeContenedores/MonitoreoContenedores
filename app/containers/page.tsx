@@ -6,9 +6,14 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 import Sidebar from "@/components/sidebar"
-import { getAllContainers } from "@/app/services/containers/containersManagement"
+import { getAllContainers,
+  reportContainerMalfunction, 
+    ReportPayload
+
+ } from "@/app/services/containers/containersManagement"
 import { Container } from "@/app/types/containers/containersType"
 
+type UserRole = 'citizen' | 'worker' | null;
 interface ContainerWithTimestamp extends Container {
   lastUpdatedClient: string
 }
@@ -16,7 +21,7 @@ interface ContainerWithTimestamp extends Container {
 export default function ContainersPage() {
   const router = useRouter()
   const [containers, setContainers] = useState<ContainerWithTimestamp[]>([])
-
+  const [userRole, setUserRole] = useState<UserRole>(null);
   const fetchContainers = async () => {
     try {
       const response = await getAllContainers()
@@ -35,6 +40,17 @@ export default function ContainersPage() {
   }
 
   useEffect(() => {
+    try {
+      const storedRole = localStorage.getItem('role');
+      if (storedRole) {
+        setUserRole(JSON.parse(storedRole).toLowerCase() as UserRole);
+      }
+    } catch (error) {
+      console.error("Error al leer el rol de localStorage:", error);
+    }
+  }, []);
+
+  useEffect(() => {
     fetchContainers()
     const interval = setInterval(() => {
       fetchContainers()
@@ -47,6 +63,43 @@ export default function ContainersPage() {
     if (level >= limit * 0.75) return "bg-yellow-500"
     return "bg-green-500"
   }
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const handleReportMalfunction = async (containerGuid: string) => {
+    // 1. Pedir la razón al usuario
+    const reason = window.prompt(
+        "Por favor, describe brevemente la avería (ej: 'Tapa rota', 'Contenedor desborda', etc.)"
+    );
+
+    // 2. Validar la razón
+    if (!reason || reason.trim() === "") {
+        alert("El reporte fue cancelado. Debes proporcionar una razón.");
+        return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+        // 3. Preparar el payload
+        const payload: ReportPayload = { reason: reason.trim() };
+
+        // 4. Llamar al servicio
+        
+        await reportContainerMalfunction(containerGuid, payload);
+        
+        // 5. Éxito
+        alert("¡Reporte enviado con éxito! Gracias por tu colaboración.");
+
+    } catch (err: any) {
+        // 6. Error
+        console.error("Error al reportar avería:", err);
+        setError(err.message); // Guardar el error
+        alert(`Error al enviar el reporte: ${err.message}`);
+    } finally {
+        setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -127,6 +180,16 @@ export default function ContainersPage() {
                             Ver detalle
                           </Button>
                         </Link>
+                        {/* ---  LÓGICA DE ROL APLICADA --- */}
+                        {userRole === 'citizen' && (
+                          <Button 
+                            className="bg-red-800 hover:bg-red-900 text-white"
+                            onClick={() => handleReportMalfunction(container.guid)}
+                          >
+                            Reportar Avería
+                          </Button>
+                        )}
+                        {/* --- FIN DE LA LÓGICA DE ROL --- */}
                       </td>
                     </tr>
                   ))}

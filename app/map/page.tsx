@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Search, Filter, Info } from "lucide-react"
 import Sidebar from "@/components/sidebar"
 import MapComponent from "@/components/GoogleMapRoutes"
+import { SimulationResult } from "@/components/GoogleMapRoutes"
 import ScheduleCollectionModal from "@/components/schedule-collection-modal"
 import { getAllContainers } from "@/app/services/containers/containersManagement"
 
@@ -41,12 +42,12 @@ export default function MapPage() {
   const [guids, setGuids] = useState<string[]>([])
   const [routeCoordinates, setRouteCoordinates] = useState<{ lat: number; lng: number }[]>([])
   const [loadingRoute, setLoadingRoute] = useState(false)
+  const [simulationData1, setSimulationData] = useState<SimulationResult | null>(null)
 
   useEffect(() => {
     const fetchContainers = async () => {
       try {
         const response = await getAllContainers()
-        console.log(response)
         if (response && Array.isArray(response)) {
           const transformed = response
             .filter((c) => c.status === "active")
@@ -63,12 +64,17 @@ export default function MapPage() {
           setContainers(transformed)
           setGuids(transformed.map(container => container.id))
         }
+        
       } catch (error) {
         console.error("Error al cargar contenedores:", error)
       }
     }
     fetchContainers()
   }, [])
+
+  const handleRouteGenerated = (response: SimulationResult) => {
+    setSimulationData(response)
+  }
 
   const filteredContainers = containers.filter(
     (container) =>
@@ -143,8 +149,8 @@ export default function MapPage() {
                     }`}
                     onClick={() => setSelectedContainer(container)}
                   >
-                    <h3 className="font-medium">{container.name}</h3>
-                    <p className="text-sm text-gray-500">{container.type}</p>
+                    <h3 className="font-medium">{container.id}</h3>
+                    <p className="text-sm text-gray-500">{container.name}</p>
                     <div className="flex items-center mt-2">
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div
@@ -174,6 +180,7 @@ export default function MapPage() {
               containers={containers}
               selectedContainer={selectedContainer}
               route={routeCoordinates}
+              simulationData={simulationData1}
             />
           </div>
 
@@ -232,6 +239,7 @@ export default function MapPage() {
             onClose={() => setIsScheduleModalOpen(false)}
             guids={guids}
             onRouteGenerated={(response) => {
+              setSimulationData(response);
               const coords = getRouteCoordinatesFromGuids(response.route)
               setRouteCoordinates(coords)
               console.log('Coordenadas generadas:', coords)

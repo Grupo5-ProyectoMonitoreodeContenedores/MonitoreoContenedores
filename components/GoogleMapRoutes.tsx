@@ -25,26 +25,34 @@ interface LatLng {
   lng: number
 }
 
-// OBSERVACIÓN: He añadido 'name' como opcional.
-// Lo usas en el panel lateral (matched?.name).
-// Si tus contenedores siempre tienen nombre, quita el '?'.
 interface Container {
   id: string
   location: LatLng
   name?: string
 }
 
+export interface SimulationResult {
+  id: number
+  created_at: string
+  total_distance_km: number
+  duration_min: number
+  route: string[] 
+  distances: string
+}
+
 interface MapComponentProps {
   containers: Container[]
   selectedContainer: Container | null
   route?: LatLng[]
+  simulationData?: SimulationResult | null
 }
 
-// Este es el componente que está en 'components/GoogleMapRoutes.tsx'
+
 export default function MapComponent({
   containers,
   selectedContainer,
   route = [],
+  simulationData = null,
 }: MapComponentProps) {
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
@@ -61,7 +69,6 @@ export default function MapComponent({
   }
 
   useEffect(() => {
-    console.log('API Key:', process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY)
     console.log('Containers:', containers)
     if (
       selectedContainer &&
@@ -74,7 +81,6 @@ export default function MapComponent({
   }, [selectedContainer])
 
   useEffect(() => {
-    // Es buena práctica chequear 'isLoaded' aquí también
     if (!isLoaded || typeof window === 'undefined' || !window.google || route.length < 2) {
       setDirections(null)
       return
@@ -120,14 +126,6 @@ export default function MapComponent({
       }
     )
   }, [isLoaded, route])
-
-  
-  // --- ⬇️ CORRECCIÓN PRINCIPAL AQUÍ ⬇️ ---
-  //
-  // Si la API de Google Maps (isLoaded) aún no está lista,
-  // mostramos un mensaje de carga.
-  // Esto evita que <GoogleMap> intente renderizarse y falle
-  // porque el objeto 'google' no está definido.
   if (!isLoaded) {
     return (
       <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
@@ -136,7 +134,6 @@ export default function MapComponent({
     )
   }
 
-  // Si isLoaded es true, el resto del componente se renderiza:
   return (
     <div style={{ display: 'flex', height: '100%' }}>
       <div style={{ flex: 1, position: 'relative' }}>
@@ -146,7 +143,6 @@ export default function MapComponent({
           zoom={14}
           onLoad={onLoad}
         >
-          {/* --- Marcadores y rutas --- */}
           <Marker
             position={centerDefault}
             icon={{ url: 'http://maps.google.com/mapfiles/ms/icons/truck.png' }}
@@ -183,38 +179,58 @@ export default function MapComponent({
       </div>
 
       {/* Panel lateral superpuesto */}
-      {route.length > 0 && (
+      {simulationData && (
         <div
-          style={{
-            width: '250px',
-            backgroundColor: 'white',
-            borderLeft: '1px solid #ccc',
-            padding: '1rem',
-            overflowY: 'auto',
-          }}
+          className="w-64 bg-white border-l border-gray-300 p-4 overflow-y-auto shadow-lg"
+          style={{ flexShrink: 0 }} // Evita que el panel se encoja
         >
-          <h3 style={{ marginBottom: '0.5rem' }}>Orden de visita</h3>
-          <ol style={{ paddingLeft: '1.2rem' }}>
-            {route.map((point, index) => {
-              const matched = containers.find(
-                (c) =>
-                  Number(c.location.lat).toFixed(5) ===
-                    Number(point.lat).toFixed(5) &&
-                  Number(c.location.lng).toFixed(5) ===
-                    Number(point.lng).toFixed(5)
-              )
+          {/* Título */}
+          <h3 className="text-lg font-semibold mb-3 text-gray-800">
+            Simulación
+          </h3>
 
-              return (
-                <li key={index}>
-                  <strong>{matched?.name || `Punto ${index + 1}`}</strong>
-                  <br />
-                  <small>
-                    Lat: {point.lat.toFixed(5)} <br />
-                    Lng: {point.lng.toFixed(5)}
-                  </small>
-                </li>
-              )
-            })}
+          {/* Resumen de la Simulación */}
+          <div className="space-y-2 mb-4 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Distancia Total:</span>
+              <span className="font-medium">
+                {simulationData.total_distance_km.toFixed(2)} km
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Duración Est.:</span>
+              <span className="font-medium">
+                {simulationData.duration_min.toFixed(0)} min
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Paradas:</span>
+              <span className="font-medium">
+                {simulationData.route.length}
+              </span>
+            </div>
+            <div className="text-xs text-gray-400 pt-2 border-t mt-2">
+              {/* Formateamos la fecha para que sea legible */}
+              Simulado: {new Date(simulationData.created_at).toLocaleString()}
+            </div>
+          </div>
+
+          {/* Orden de la Ruta */}
+          <h4 className="text-md font-semibold mb-2 text-gray-800">
+            Orden de Ruta
+          </h4>
+          <ol className="list-decimal list-inside space-y-2">
+            
+            {/* Mapeamos el array de strings de simulationData.route.
+              Asumo que 'routeName' es el string que quieres mostrar 
+              (ej: ID o Nombre del contenedor).
+            */}
+            {simulationData.route.map((routeName, index) => (
+              <li key={index} className="text-sm text-gray-700">
+                {routeName}
+              </li>
+            ))}
+            
           </ol>
         </div>
       )}
