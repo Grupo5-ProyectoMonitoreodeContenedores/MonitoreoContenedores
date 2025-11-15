@@ -65,11 +65,11 @@ export default function Home() {
 
     } catch (err: any) {
       console.error("Error al cargar datos del dashboard:", err);
-      setError("No se pudieron cargar las m茅tricas. Intente de nuevo.");
+      setError("No se pudieron cargar las métricas. Intente de nuevo.");
     } finally {
       setIsLoading(false); // Termina la carga principal
     }
-  }, []); // useCallback para que la funci贸n no cambie
+  }, []); // useCallback para que la función no cambie
 
   const handleResolveReport = async (reportGuid: string) => {
     setIsResolving(true); // Activa el loading del bot贸n
@@ -137,7 +137,7 @@ export default function Home() {
         console.error("Error al buscar direcciones en Google Maps:", googleError);
         setAlertsWithAddresses(allActiveAlerts.map(alerta => ({
           ...alerta,
-          address: "Error al cargar direcci贸n"
+          address: "Error al cargar dirección"
         })));
       } finally {
         setIsLoadingAddresses(false);
@@ -219,7 +219,7 @@ export default function Home() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Contenedores Cr铆ticos ({UMBRAL_CRITICO}%)</p>
+                    <p className="text-sm font-medium text-gray-500">Contenedores Críticos ({UMBRAL_CRITICO}%)</p>
                     {/* DATO DIN脕MICO */}
                     <h3 className="text-2xl font-bold mt-1">{criticalCount}</h3>
                   </div>
@@ -301,7 +301,7 @@ export default function Home() {
                               Contenedor: {report.container_guid}
                             </p>
                             <p className="text-sm text-gray-700 mt-1">
-                              Raz贸n: "{report.reason}"
+                              Razón: "{report.reason}"
                             </p>
                             <p className="text-xs text-gray-500 mt-1">
                               Reportado el: {new Date(report.reported_at).toLocaleString()}
