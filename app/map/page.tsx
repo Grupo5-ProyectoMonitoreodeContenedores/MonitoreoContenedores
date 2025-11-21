@@ -1,15 +1,17 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, Filter, Info } from "lucide-react"
+import { Search, Filter, Info, Bell, X } from "lucide-react"
 import Sidebar from "@/components/sidebar"
 import MapComponent from "@/components/GoogleMapRoutes"
 import { SimulationResult } from "@/components/GoogleMapRoutes"
 import ScheduleCollectionModal from "@/components/schedule-collection-modal"
 import { getAllContainers } from "@/app/services/containers/containersManagement"
 import LastRouteFooter from "@/components/LastRouteFooter"
+
+// --- INTERFACES ---
 interface Container {
   id: string
   name: string
@@ -43,6 +45,8 @@ type UserRole = 'citizen' | 'worker' | null;
 
 export default function MapPage() {
   const router = useRouter()
+
+  // --- ESTADOS ---
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedContainer, setSelectedContainer] = useState<Container | null>(null)
   const [selectedRoute, setSelectedRoute] = useState<RouteType | null>(null)
@@ -50,12 +54,23 @@ export default function MapPage() {
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false)
   const [containers, setContainers] = useState<Container[]>([])
   const [guids, setGuids] = useState<string[]>([])
+  
+  // Estados de Ruta y Mapa
   const [routeCoordinates, setRouteCoordinates] = useState<{ lat: number; lng: number }[]>([])
   const [loadingRoute, setLoadingRoute] = useState(false)
   const [simulationData1, setSimulationData] = useState<SimulationResult | null>(null)
-  const [userRole, setUserRole] = useState<UserRole>(null);
   const [allSimulations, setAllSimulations] = useState<Simulation[]>([])
+  
+  // Estados de Usuario y Alertas
+  const [userRole, setUserRole] = useState<UserRole>(null);
+  const [newRouteAlert, setNewRouteAlert] = useState<Simulation | null>(null)
+  
+  // Referencia para rastrear el último ID sin renderizar
+  const latestSimulationIdRef = useRef<number>(0); 
 
+  // --- EFECTOS ---
+
+  // 1. Cargar Rol
   useEffect(() => {
     try {
       const storedRole = localStorage.getItem('role');
@@ -67,6 +82,7 @@ export default function MapPage() {
     }
   }, []);
 
+  // 2. Cargar Contenedores
   useEffect(() => {
     const fetchContainers = async () => {
       try {
@@ -80,14 +96,13 @@ export default function MapPage() {
               location: { lat: c.latitude, lng: c.longitude },
               fillLevel: c.capacity,
               type: "Desconocido",
-              lastCollection: "2025-06-15", // reemplaza con dato real si lo tienes
+              lastCollection: "2025-06-15", 
               status: c.status,
               limit: c.limit ?? 80,
             }))
           setContainers(transformed)
           setGuids(transformed.map(container => container.id))
         }
-
       } catch (error) {
         console.error("Error al cargar contenedores:", error)
       }
@@ -95,6 +110,7 @@ export default function MapPage() {
     fetchContainers()
   }, []);
 
+  // 3. Cargar Simulaciones + Lógica de Polling (Alertas)
   useEffect(() => {
     const fetchSimulations = async () => {
       try {
@@ -102,9 +118,15 @@ export default function MapPage() {
         
         if (response.ok) {
           const data = await response.json()
-          // Opcional: Ordenar por fecha descendente si la API no lo garantiza
-          // data.sort((a: Simulation, b: Simulation) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
           setAllSimulations(data)
+          
+          // Inicializamos la referencia con el ID más alto actual
+          if (data.length > 0) {
+             // Asumiendo que el endpoint devuelve ordenado DESC, el [0] es el mayor. 
+             // Si no, usamos Math.max
+             const maxId = Math.max(...data.map((s: Simulation) => s.id));
+             latestSimulationIdRef.current = maxId;
+          }
         } else {
           console.error('Error al obtener simulaciones:', response.statusText)
         }
@@ -113,8 +135,52 @@ export default function MapPage() {
       }
     }
 
-    fetchSimulations()
-  }, []);
+    // Carga inicial
+    fetchSimulations();
+
+    // --- POLLING (Solo para Ciudadanos) ---
+    let intervalId: NodeJS.Timeout;
+
+    if (userRole === 'citizen') {
+      intervalId = setInterval(async () => {
+        try {
+          const response = await fetch('https://backend-api-monitoreo.onrender.com/api/v1/simulation/get-all-simulations');
+          if (response.ok) {
+            const data = await response.json();
+            
+            if (data.length > 0) {
+              // Buscamos la simulación más nueva (asumiendo que es la primera del array o por ID)
+              const latestSim = data.reduce((prev: Simulation, current: Simulation) => (prev.id > current.id) ? prev : current);
+              
+              // Si detectamos un ID nuevo que no conocíamos
+              if (latestSim.id > latestSimulationIdRef.current) {
+                console.log("¡Alerta! Nueva ruta detectada:", latestSim.id);
+                
+                // 1. Actualizamos referencia
+                latestSimulationIdRef.current = latestSim.id;
+                
+                // 2. Actualizamos datos globales
+                setAllSimulations(data);
+                
+                // 3. Mostramos Alerta
+                setNewRouteAlert(latestSim);
+              }
+            }
+          }
+        } catch (error) {
+           // Errores de red silenciosos en polling
+        }
+      }, 10000); // Revisar cada 10 segundos
+    }
+
+    // Cleanup al desmontar
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+
+  }, [userRole]); // Se reinicia si cambia el rol
+
+  // --- HANDLERS ---
 
   const handleRouteGenerated = (response: SimulationResult) => {
     setSimulationData(response)
@@ -129,10 +195,7 @@ export default function MapPage() {
   const handleScheduleCollection = () => {
     console.log("Programar recolección para el contenedor:", selectedContainer)
     setIsScheduleModalOpen(true)
-    console.log("Guids disponibles:", guids)
-    console.log("Valor de modales:", isScheduleModalOpen)
   }
-
 
   const getRouteCoordinatesFromGuids = (orderedGuids: string[]) => {
     return orderedGuids
@@ -149,11 +212,65 @@ export default function MapPage() {
       .filter((coord) => coord !== null) as { lat: number; lng: number }[]
   }
 
+  const handleViewNewRoute = () => {
+      // Acción al hacer click en "Ver detalles" de la alerta
+      setNewRouteAlert(null);
+      // Aquí podrías añadir lógica para hacer scroll al footer o resaltar el mapa
+  }
 
+  // --- RENDER ---
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen bg-gray-100 relative">
+      
+      {/* === POPUP DE ALERTA === */}
+      {newRouteAlert && (
+        <div className="fixed top-6 right-6 z-50 w-96 bg-white rounded-lg shadow-2xl border-l-4 border-green-600 p-4 animate-in fade-in slide-in-from-top-5 duration-300">
+            <div className="flex justify-between items-start">
+                <div className="flex items-center gap-3">
+                    <div className="bg-green-100 p-2 rounded-full">
+                        <Bell className="h-6 w-6 text-green-600" />
+                    </div>
+                    <div>
+                        <h4 className="font-bold text-gray-800">¡Nueva Ruta de Recolección!</h4>
+                        <p className="text-sm text-gray-600 mt-1">
+                            Se ha programado un camión.<br/>
+                            <span className="font-medium text-xs">
+                                Creado: {new Date(newRouteAlert.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            </span>
+                        </p>
+                    </div>
+                </div>
+                <button 
+                    onClick={() => setNewRouteAlert(null)}
+                    className="text-gray-400 hover:text-gray-600"
+                >
+                    <X className="h-5 w-5" />
+                </button>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+                <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => setNewRouteAlert(null)}
+                >
+                    Cerrar
+                </Button>
+                <Button 
+                    size="sm" 
+                    className="bg-green-600 hover:bg-green-700"
+                    onClick={handleViewNewRoute}
+                >
+                    Entendido
+                </Button>
+            </div>
+        </div>
+      )}
+
       <Sidebar />
+      
       <div className="flex-1 flex flex-col overflow-hidden">
+        
+        {/* HEADER */}
         <header className="bg-white shadow-sm py-4 px-6">
           <h1 className="text-xl font-semibold text-gray-800">Mapa de Contenedores</h1>
           <div className="flex items-center gap-2 mt-2">
@@ -178,10 +295,10 @@ export default function MapPage() {
               </div>
             )}
           </div>
-
         </header>
 
         <div className="flex-1 flex overflow-hidden">
+          {/* SIDEBAR LISTA CONTENEDORES */}
           <div className="w-80 bg-white border-r overflow-y-auto">
             <div className="p-4">
               <div className="space-y-3">
@@ -219,6 +336,7 @@ export default function MapPage() {
             </div>
           </div>
 
+          {/* COMPONENTE MAPA */}
           <div className="flex-1 relative">
             <MapComponent
               containers={containers}
@@ -228,6 +346,7 @@ export default function MapPage() {
             />
           </div>
 
+          {/* PANEL DETALLES */}
           {selectedContainer && (
             <div className="w-80 bg-white border-l overflow-y-auto p-4">
               <div className="flex justify-between items-center mb-4">
@@ -269,32 +388,40 @@ export default function MapPage() {
                     {Number(selectedContainer.location.lng).toFixed(6)}
                   </p>
                 </div>
-
               </div>
             </div>
           )}
         </div>
 
-        <footer className="bg-white shadow-sm py-4 px-6">     
-          <LastRouteFooter allSimulations={allSimulations} />     
-        </footer>
+        {/* FOOTER HISTORIAL */}
+        <div className="z-10">
+             <LastRouteFooter allSimulations={allSimulations} />     
+        </div>
 
+        {/* MODAL WORKER */}
         {(
           <ScheduleCollectionModal
-
             isOpen={isScheduleModalOpen}
             onClose={() => setIsScheduleModalOpen(false)}
             guids={guids}
+            setLoadingRoute={setLoadingRoute}
             onRouteGenerated={(response) => {
+              // 1. Mapa Panel Lateral
               setSimulationData(response);
+              
+              // 2. Líneas Mapa
               const coords = getRouteCoordinatesFromGuids(response.route)
               setRouteCoordinates(coords)
-              console.log('Coordenadas generadas:', coords)
+              
+              // 3. Footer (Agregamos al inicio del array)
+              setAllSimulations((prev) => [response as unknown as Simulation, ...prev])
+              
+              // 4. Actualizamos referencia para que el worker NO reciba su propia alerta
+              latestSimulationIdRef.current = response.id;
+
               setIsScheduleModalOpen(false)
               setLoadingRoute(false)
             }}
-            setLoadingRoute={setLoadingRoute}
-
           />
         )}
       </div>
