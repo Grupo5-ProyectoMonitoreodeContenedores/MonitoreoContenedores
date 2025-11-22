@@ -304,7 +304,7 @@ export default function Home() {
                               Razón: "{report.reason}"
                             </p>
                             <p className="text-xs text-gray-500 mt-1">
-                              Reportado el: {new Date(report.reported_at).toLocaleString()}
+                              Reportado el: {new Date(report.reported_at + (report.reported_at.endsWith("Z") ? "" : "Z")).toLocaleString()}
                             </p>
                           </div>
 
