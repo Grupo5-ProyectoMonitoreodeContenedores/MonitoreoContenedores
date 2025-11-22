@@ -59,7 +59,9 @@ export default function ScheduleCollectionModal({
     try {
       setLoading(true)
       setLoadingRoute(true)  // ← activa el GIF
-      const response = await bestRoute(guids)
+
+      const customCreatedAt = `${formData.date}T${formData.time}:00`
+      const response = await bestRoute(guids, customCreatedAt)
       if (onRouteGenerated) onRouteGenerated(response)
     } catch (error) {
       alert("Error al generar la ruta.")

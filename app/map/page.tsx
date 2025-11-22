@@ -118,14 +118,18 @@ export default function MapPage() {
         
         if (response.ok) {
           const data = await response.json()
-          setAllSimulations(data)
+
+          // --- CORRECCIÓN AQUÍ ---
+          // Ordenamos explícitamente: ID mayor va primero (Descendente)
+          const sortedData = data.sort((a: Simulation, b: Simulation) => b.id - a.id);
+
+          // Guardamos el array ya ordenado
+          setAllSimulations(sortedData)
           
-          // Inicializamos la referencia con el ID más alto actual
-          if (data.length > 0) {
-             // Asumiendo que el endpoint devuelve ordenado DESC, el [0] es el mayor. 
-             // Si no, usamos Math.max
-             const maxId = Math.max(...data.map((s: Simulation) => s.id));
-             latestSimulationIdRef.current = maxId;
+          // Inicializamos la referencia
+          if (sortedData.length > 0) {
+              // Como ya ordenamos, el índice 0 SIEMPRE es el ID más alto
+              latestSimulationIdRef.current = sortedData[0].id;
           }
         } else {
           console.error('Error al obtener simulaciones:', response.statusText)
@@ -134,6 +138,7 @@ export default function MapPage() {
         console.error('Error de red al cargar simulaciones:', error)
       }
     }
+    // ... resto del código (polling, etc)
 
     // Carga inicial
     fetchSimulations();
@@ -233,9 +238,9 @@ export default function MapPage() {
                     <div>
                         <h4 className="font-bold text-gray-800">¡Nueva Ruta de Recolección!</h4>
                         <p className="text-sm text-gray-600 mt-1">
-                            Se ha programado un camión.<br/>
+                            Se ha programado un camión para la recolección.<br/>
                             <span className="font-medium text-xs">
-                                Creado: {new Date(newRouteAlert.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                Hora programada: {new Date(newRouteAlert.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                             </span>
                         </p>
                     </div>

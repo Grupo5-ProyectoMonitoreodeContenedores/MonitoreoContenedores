@@ -96,21 +96,31 @@ export async function deleteContainer(guid: string): Promise<void> {
 }
 
 
-export async function bestRoute( guids: string[]): Promise<any> {
+export async function bestRoute( guids: string[], customDate?: string): Promise<any> {
+
+  const payload: any = { 
+    container_guids: guids 
+  };
+
+  // 2. Si recibimos una fecha (del modal), la agregamos al payload
+  // El nombre 'created_at' debe coincidir exactamente con lo que pusiste en el Pydantic del backend
+  if (customDate) {
+    payload.created_at = customDate;
+  }
+
   const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/simulation/generate-simulation`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ container_guids: guids })
+    body: JSON.stringify(payload)
   });
 
   if (!res.ok) {
     throw new Error('Failed to fetch best route');
   }
 
-  const json = await res.json();
-  return json;
+  return await res.json();
 }
 
 /**

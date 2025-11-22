@@ -175,11 +175,12 @@ export default function ContainersPage() {
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">{container.status}</td>
                       <td className="px-6 py-4 text-sm font-medium">
+                         {userRole === 'worker' && (
                         <Link href={`/containers/${container.guid}`}>
                           <Button className="bg-green-800 hover:bg-green-900 text-white">
                             Ver detalle
                           </Button>
-                        </Link>
+                        </Link>)}
                         {/* ---  LÓGICA DE ROL APLICADA --- */}
                         {userRole === 'citizen' && (
                           <Button 
@@ -206,13 +207,14 @@ export default function ContainersPage() {
           </div>
         </main>
 
+        {userRole === 'worker' && (                  
         <div className="fixed bottom-8 right-8">
           <Link href="/containers/add-container">
             <Button className="h-14 w-14 rounded-full bg-green-700 hover:bg-green-800">
               <Plus className="h-6 w-6" />
             </Button>
           </Link>
-        </div>
+        </div>)}
       </div>
     </div>
   )
